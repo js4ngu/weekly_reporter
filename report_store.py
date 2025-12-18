@@ -12,7 +12,7 @@ class ReportStore:
         # JSON 파일 경로 설정
         if json_file is None:
             script_dir = Path(__file__).parent
-            json_file = script_dir / "output" / "personal_report.json"
+            json_file = script_dir / "output" / "data.json"
         
         self.json_file = Path(json_file)
         self.json_file.parent.mkdir(parents=True, exist_ok=True)

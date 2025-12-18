@@ -13,14 +13,32 @@ class ReportApp:
         self.root = tk.Tk()
         self.root.geometry("1200x500")
 
+        # top toolbar (above tabs and calendar)
+        self.toolbar = tk.Frame(self.root)
+        self.toolbar.pack(side="top", fill="x")
+        # top toolbar (kept for future controls). Today button moved to calendar bottom-left.
+
+        # left container for calendar + controls
+        self.left_frame = tk.Frame(self.root)
+        self.left_frame.pack(side="left", fill="both", expand=True)
+
         self.cal = Calendar(
-            self.root,
+            self.left_frame,
             selectmode="day",
             date_pattern="yyyy-mm-dd",
             firstweekday="sunday",
             showweeknumbers=False
         )
-        self.cal.pack(side="left", fill="both", expand=True)
+        self.cal.pack(fill="both", expand=True)
+
+        # bottom bar inside left_frame for controls (Today 버튼을 왼쪽 하단에 배치)
+        self.left_bottom_bar = tk.Frame(self.left_frame)
+        self.left_bottom_bar.pack(side="bottom", fill="x")
+        try:
+            tb_today = tk.Button(self.left_bottom_bar, text="오늘", command=self.go_to_today)
+            tb_today.pack(side="left", padx=6, pady=6)
+        except Exception:
+            pass
 
         # highlight this week and following weeks
         today = datetime.date.today()
@@ -86,10 +104,33 @@ class ReportApp:
         self.notebook.add(self.statistics_tab_obj.get_frame(), text="통계")
         self.notebook.add(self.settings_tab_obj.get_frame(), text="설정")
 
+        # keyboard shortcuts: 't' and Ctrl+T
+        try:
+            self.root.bind('<Key-t>', lambda e: self.go_to_today())
+            self.root.bind('<Control-t>', lambda e: self.go_to_today())
+        except Exception:
+            pass
+
     def on_date_select(self, event):
         date = self.cal.get_date()
         # update report tab with selected date
         self.report_tab_obj.set_date(date)
+
+    def go_to_today(self):
+        today = datetime.date.today()
+        # attempt to set selection; support both date object and string
+        try:
+            self.cal.selection_set(today)
+        except Exception:
+            try:
+                self.cal.selection_set(today.strftime("%Y-%m-%d"))
+            except Exception:
+                pass
+        # trigger tab update
+        try:
+            self.report_tab_obj.set_date(today.strftime("%Y-%m-%d"))
+        except Exception:
+            pass
 
     def run(self):
         self.root.mainloop()
