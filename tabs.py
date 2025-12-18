@@ -11,7 +11,9 @@ class ReportTab:
         self.parent = parent
         self.frame = tk.Frame(parent)
         self.current_index = None
+        self.current_orig_date = None
         self.current_date = None
+        self._visible_reports = []  # list of (orig_date, idx)
         self._build_ui()
 
     def _build_ui(self):
@@ -42,13 +44,22 @@ class ReportTab:
         self.input_frame = tk.Frame(self.frame)
         self.input_frame.pack(side="top", fill="both", expand=True)
 
-        # Date with calendar picker
-        self.date_label = tk.Label(self.input_frame, text="날짜")
-        self.date_label.pack(anchor="nw", padx=6, pady=(6, 0))
-        self.date_entry = tk.Entry(self.input_frame, width=20)
-        self.date_entry.pack(fill="x", padx=6)
-        # 기본값: 오늘 날짜
-        self.date_entry.insert(0, datetime.date.today().strftime("%Y-%m-%d"))
+        # NOTE: single-period input handled below (start_entry / optional end_entry)
+
+        # Period: start_date ~ end_date with checkbox to enable end_date
+        time_frame = tk.Frame(self.input_frame)
+        time_frame.pack(anchor="nw", fill="x", padx=6, pady=(6, 0))
+        time_label = tk.Label(time_frame, text="기간 (YYYY-MM-DD)")
+        time_label.pack(side="left")
+        self.start_entry = tk.Entry(time_frame, width=12)
+        self.start_entry.pack(side="left", padx=(6, 0))
+        tilde = tk.Label(time_frame, text=" ~ ")
+        tilde.pack(side="left")
+        self.end_entry = tk.Entry(time_frame, width=12, state='disabled')
+        self.end_entry.pack(side="left")
+        self.end_var = tk.BooleanVar(value=False)
+        self.end_check = tk.Checkbutton(time_frame, text="종료일 사용", variable=self.end_var, command=self._toggle_end)
+        self.end_check.pack(side="left", padx=6)
 
         # Category
         self.cat_label = tk.Label(self.input_frame, text="카테고리")
@@ -81,9 +92,9 @@ class ReportTab:
     def set_date(self, date):
         """날짜 선택 시 보고서 목록 새로고침"""
         self.current_date = date
-        # Entry에 직접 입력
-        self.date_entry.delete(0, tk.END)
-        self.date_entry.insert(0, date)
+        # Set period start to selected date and refresh list
+        self.start_entry.delete(0, tk.END)
+        self.start_entry.insert(0, date)
         self.refresh_report_list(date)
         self.current_index = None
         self.clear_inputs()
@@ -92,17 +103,27 @@ class ReportTab:
         if self.store.has_reports(date):
             self.report_listbox.selection_set(0)
             self.report_listbox.event_generate("<<ListboxSelect>>")
-        self.current_index = None
-        self.clear_inputs()
-        self.report_listbox.selection_clear(0, tk.END)
-        self.del_btn.config(state='disabled')
-        if self.store.has_reports(date):
-            self.report_listbox.selection_set(0)
-            self.report_listbox.event_generate("<<ListboxSelect>>")
+
+    def _toggle_end(self):
+        if self.end_var.get():
+            # enable end entry and default it to start value if empty
+            self.end_entry.config(state='normal')
+            try:
+                start_val = self.start_entry.get().strip()
+            except Exception:
+                start_val = ''
+            if not self.end_entry.get().strip():
+                if start_val:
+                    self.end_entry.delete(0, tk.END)
+                    self.end_entry.insert(0, start_val)
+        else:
+            # keep start_entry intact; only clear end
+            self.end_entry.delete(0, tk.END)
+            self.end_entry.config(state='disabled')
 
     def save_report(self):
-        new_date = self.date_entry.get().strip()
-        if not new_date:
+        selected_date = self.start_entry.get().strip()
+        if not selected_date:
             return
 
         content = self.text.get("1.0", tk.END).strip()
@@ -110,31 +131,47 @@ class ReportTab:
         location = self.loc_entry.get().strip()
         attendees = self.att_entry.get().strip()
 
+        # determine start/end dates
+        start_date = self.start_entry.get().strip() or selected_date
+        end_date = self.end_entry.get().strip() if self.end_var.get() else start_date
+
         report = {
             "content": content,
             "category": category,
             "location": location,
             "attendees": attendees,
+            "start_date": start_date,
+            "end_date": end_date,
         }
 
-        if self.current_index is None:
-            # 새 보고서 추가
-            self.current_index = self.store.add_report(new_date, report)
-        else:
-            # 보고서 수정 - 날짜가 변경되었으면 이동, 아니면 업데이트
-            old_date = self.current_date
-            if old_date != new_date:
-                # 날짜 변경: 기존 날짜에서 삭제, 새 날짜에 추가
-                self.current_index = self.store.move_report(old_date, new_date, self.current_index, report)
-                self.current_date = new_date
-            else:
-                # 같은 날짜: 그냥 업데이트
-                self.store.update_report(new_date, self.current_index, report)
+        key_date = start_date
 
-        self.refresh_report_list(new_date)
+        if self.current_index is None:
+            # 새 보고서 추가 (저장 키는 시작일)
+            self.current_index = self.store.add_report(key_date, report)
+            self.current_orig_date = key_date
+        else:
+            # 보고서 수정 - 실제로 저장된 원래 키(orig_date)를 사용
+            old_date = self.current_orig_date or selected_date
+            if old_date != key_date:
+                # 날짜 변경: 기존 날짜에서 삭제, 새 날짜에 추가
+                self.current_index = self.store.move_report(old_date, key_date, self.current_index, report)
+                self.current_orig_date = key_date
+            else:
+                # 같은 원래 키: 업데이트
+                self.store.update_report(key_date, self.current_index, report)
+
+        # 새로고침 후, visible list에서 방금 저장된 항목의 인덱스를 찾아 선택
+        self.refresh_report_list(selected_date)
         self.report_listbox.selection_clear(0, tk.END)
-        self.report_listbox.selection_set(self.current_index)
-        self.report_listbox.see(self.current_index)
+        sel_idx = None
+        for i, (orig, idx) in enumerate(self._visible_reports):
+            if orig == (self.current_orig_date or key_date) and idx == self.current_index:
+                sel_idx = i
+                break
+        if sel_idx is not None:
+            self.report_listbox.selection_set(sel_idx)
+            self.report_listbox.see(sel_idx)
 
         self.cat_entry['values'] = self.store.list_categories()
         
@@ -143,11 +180,19 @@ class ReportTab:
 
     def refresh_report_list(self, date):
         self.report_listbox.delete(0, tk.END)
-        reports = self.store.list_reports(date)
-        for i, r in enumerate(reports):
+        found = self.store.find_reports_for_date(date)
+        self._visible_reports = []
+        for i, (orig_date, idx, r) in enumerate(found):
             preview = r.get("content", "").splitlines()[0][:40]
-            label = f"{i+1}. [{r.get('category','')}] {preview}"
+            start = r.get("start_date", orig_date)
+            end = r.get("end_date", start)
+            if start == end:
+                time_str = f"[{start}] "
+            else:
+                time_str = f"[{start}~{end}] "
+            label = f"{i+1}. {time_str}[{r.get('category','')}] {preview}"
             self.report_listbox.insert(tk.END, label)
+            self._visible_reports.append((orig_date, idx))
 
     def on_report_select(self, event):
         sel = self.report_listbox.curselection()
@@ -155,16 +200,18 @@ class ReportTab:
             self.del_btn.config(state='disabled')
             return
         index = sel[0]
-        self.current_index = index
-        date = self.date_entry.get().strip()
-        if not date:
+        # map visible index -> (orig_date, idx)
+        try:
+            orig_date, orig_idx = self._visible_reports[index]
+        except Exception:
+            self.del_btn.config(state='disabled')
             return
 
-        # 현재 날짜 저장 (나중에 수정할 때 이전 날짜와 비교하기 위함)
-        self.current_date = date
+        self.current_orig_date = orig_date
+        self.current_index = orig_idx
 
         try:
-            r = self.store.get_report(date, index)
+            r = self.store.get_report(orig_date, orig_idx)
         except Exception:
             return
 
@@ -176,6 +223,20 @@ class ReportTab:
         self.att_entry.insert(0, r.get("attendees", ""))
         self.text.delete("1.0", tk.END)
         self.text.insert(tk.END, r.get("content", ""))
+        # load period
+        start = r.get("start_date", "")
+        end = r.get("end_date", "")
+        self.start_entry.delete(0, tk.END)
+        self.start_entry.insert(0, start)
+        if end and end != start:
+            self.end_var.set(True)
+            self.end_entry.config(state='normal')
+            self.end_entry.delete(0, tk.END)
+            self.end_entry.insert(0, end)
+        else:
+            self.end_var.set(False)
+            self.end_entry.delete(0, tk.END)
+            self.end_entry.config(state='disabled')
         
         # Enable delete button
         self.del_btn.config(state='normal')
@@ -187,44 +248,51 @@ class ReportTab:
         pass
 
     def new_report(self):
-        date = self.date_entry.get_date().strftime("%Y-%m-%d")
+        date = self.start_entry.get().strip()
         if not date:
             return
 
-        self.current_index = self.store.add_report(date, None)
+        # add empty report under the selected date
+        self.current_index = self.store.add_report(date, {"content":"", "category":"", "location":"", "attendees":"", "start_date":date, "end_date":""})
+        self.current_orig_date = date
         self.refresh_report_list(date)
         self.report_listbox.selection_clear(0, tk.END)
-        self.report_listbox.selection_set(self.current_index)
-        self.report_listbox.event_generate("<<ListboxSelect>>")
+        # select the last visible item if matches
+        for i, (orig, idx) in enumerate(self._visible_reports):
+            if orig == self.current_orig_date and idx == self.current_index:
+                self.report_listbox.selection_set(i)
+                self.report_listbox.event_generate("<<ListboxSelect>>")
+                break
 
     def create_new_report(self):
         """새로운 빈 보고서 폼 생성"""
         # 현재 날짜가 설정되지 않았으면 오늘 날짜로 설정
-        current_date = self.date_entry.get().strip()
+        current_date = self.start_entry.get().strip()
         if not current_date:
             today = datetime.date.today().strftime("%Y-%m-%d")
-            self.date_entry.delete(0, tk.END)
-            self.date_entry.insert(0, today)
+            self.start_entry.delete(0, tk.END)
+            self.start_entry.insert(0, today)
             self.current_date = today
         else:
             self.current_date = current_date
         
         self.current_index = None
+        self.current_orig_date = None
         self.clear_inputs()
         self.report_listbox.selection_clear(0, tk.END)
         self.del_btn.config(state='disabled')
 
     def delete_report(self):
-        date = self.date_entry.get().strip()
-        if not date:
-            return
-
         sel = self.report_listbox.curselection()
         if not sel:
             return
         idx = sel[0]
-        self.store.delete_report(date, idx)
-        self.refresh_report_list(date)
+        try:
+            orig_date, orig_idx = self._visible_reports[idx]
+        except Exception:
+            return
+        self.store.delete_report(orig_date, orig_idx)
+        self.refresh_report_list(self.start_entry.get().strip())
         self.current_index = None
         self.clear_inputs()
         self.del_btn.config(state='disabled')
@@ -237,6 +305,18 @@ class ReportTab:
         self.loc_entry.delete(0, tk.END)
         self.att_entry.delete(0, tk.END)
         self.text.delete("1.0", tk.END)
+        # clear period inputs
+        # default start date to selected date or today
+        sel = self.start_entry.get().strip()
+        if sel:
+            self.start_entry.delete(0, tk.END)
+            self.start_entry.insert(0, sel)
+        else:
+            self.start_entry.delete(0, tk.END)
+            self.start_entry.insert(0, datetime.date.today().strftime("%Y-%m-%d"))
+        self.end_entry.delete(0, tk.END)
+        self.end_entry.config(state='disabled')
+        self.end_var.set(False)
 
 
 class SearchTab:

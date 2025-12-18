@@ -23,6 +23,33 @@ class ReportStore:
     def list_reports(self, date):
         return list(self._reports.get(date, []))
 
+    def find_reports_for_date(self, date_str):
+        """주어진 날짜(date_str)가 포함되는 모든 보고서를 (orig_date, index, report) 형태로 반환
+        date_str: 'YYYY-MM-DD'
+        """
+        results = []
+        try:
+            from datetime import datetime as _dt
+            target = _dt.strptime(date_str, "%Y-%m-%d").date()
+        except Exception:
+            return results
+
+        for orig_date, reports in self._reports.items():
+            for idx, r in enumerate(reports):
+                # Determine start and end
+                s = r.get("start_date") or orig_date
+                e = r.get("end_date") or s
+                try:
+                    s_date = _dt.strptime(s, "%Y-%m-%d").date()
+                    e_date = _dt.strptime(e, "%Y-%m-%d").date()
+                except Exception:
+                    continue
+
+                if s_date <= target <= e_date:
+                    results.append((orig_date, idx, r))
+
+        return results
+
     def add_report(self, date, report=None):
         if report is None:
             report = {"content": "", "category": "", "location": "", "attendees": ""}
