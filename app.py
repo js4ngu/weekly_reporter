@@ -4,13 +4,14 @@ from tkcalendar import Calendar
 import datetime
 
 import report_store
+from tabs import ReportTab, SearchTab, StatisticsTab, SettingsTab
 
 
 class ReportApp:
     def __init__(self):
         self.store = report_store.ReportStore()
         self.root = tk.Tk()
-        self.root.geometry("800x400")
+        self.root.geometry("1200x500")
 
         self.cal = Calendar(
             self.root,
@@ -69,164 +70,45 @@ class ReportApp:
             pass
         self.cal.bind("<<CalendarSelected>>", self.on_date_select)
 
-        self.right = tk.Frame(self.root)
-        self.right.pack(side="right", fill="both", expand=True)
+        # Notebook (tabs) for the right side
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(side="right", fill="both", expand=True)
 
-        # Top: report list for the selected date
-        self.list_frame = tk.Frame(self.right)
-        self.list_frame.pack(side="top", fill="x")
+        # Initialize tab instances
+        self.report_tab_obj = ReportTab(self.notebook, self.store)
+        self.search_tab_obj = SearchTab(self.notebook, self.store)
+        self.statistics_tab_obj = StatisticsTab(self.notebook, self.store)
+        self.settings_tab_obj = SettingsTab(self.notebook, self.store)
 
-        self.list_label = tk.Label(self.list_frame, text="보고서 목록")
-        self.list_label.pack(anchor="nw", padx=6, pady=(6, 0))
-
-        self.report_listbox = tk.Listbox(self.list_frame, height=6)
-        self.report_listbox.pack(side="left", fill="x", expand=True, padx=(6,0), pady=6)
-        self.list_scroll = tk.Scrollbar(self.list_frame, command=self.report_listbox.yview)
-        self.list_scroll.pack(side="left", fill="y", pady=6)
-        self.report_listbox.config(yscrollcommand=self.list_scroll.set)
-        self.report_listbox.bind("<<ListboxSelect>>", self.on_report_select)
-
-        btns_frame = tk.Frame(self.list_frame)
-        btns_frame.pack(side="left", padx=6)
-        self.new_btn = tk.Button(btns_frame, text="새 보고서", command=self.new_report)
-        self.new_btn.pack(fill="x")
-        self.del_btn = tk.Button(btns_frame, text="삭제", command=self.delete_report)
-        self.del_btn.pack(fill="x", pady=(6,0))
-
-        # Bottom: input area (category/location/attendees/text/save)
-        self.input_frame = tk.Frame(self.right)
-        self.input_frame.pack(side="top", fill="both", expand=True)
-
-        # Category
-        self.cat_label = tk.Label(self.input_frame, text="카테고리")
-        self.cat_label.pack(anchor="nw", padx=6, pady=(6, 0))
-        self.cat_entry = ttk.Combobox(self.input_frame, values=self.store.list_categories(), state='normal')
-        self.cat_entry.pack(fill="x", padx=6)
-
-        # Location
-        self.loc_label = tk.Label(self.input_frame, text="장소")
-        self.loc_label.pack(anchor="nw", padx=6, pady=(6, 0))
-        self.loc_entry = tk.Entry(self.input_frame)
-        self.loc_entry.pack(fill="x", padx=6)
-
-        # Attendees
-        self.att_label = tk.Label(self.input_frame, text="참석자")
-        self.att_label.pack(anchor="nw", padx=6, pady=(6, 0))
-        self.att_entry = tk.Entry(self.input_frame)
-        self.att_entry.pack(fill="x", padx=6)
-
-        # Main text area
-        self.att_label = tk.Label(self.input_frame, text="보고서 내용")
-        self.att_label.pack(anchor="nw", padx=6, pady=(6, 0))
-        self.text = tk.Text(self.input_frame, height=10)
-        self.text.pack(fill="both", expand=True, padx=6, pady=6)
-
-        # Save button
-        self.btn = tk.Button(self.input_frame, text="보고서 저장", command=self.save_report)
-        self.btn.pack(padx=6, pady=(0,6))
-
-        # track current selected report index for the date
-        self.current_index = None
+        # Add tabs to notebook
+        self.notebook.add(self.report_tab_obj.get_frame(), text="개인보고서")
+        self.notebook.add(self.search_tab_obj.get_frame(), text="검색")
+        self.notebook.add(self.statistics_tab_obj.get_frame(), text="통계")
+        self.notebook.add(self.settings_tab_obj.get_frame(), text="설정")
 
     def on_date_select(self, event):
         date = self.cal.get_date()
-        # refresh report list for selected date
-        self.refresh_report_list(date)
-
-        # clear selection and fields
-        self.current_index = None
-        self.clear_inputs()
-        # if there are reports, select the first
-        if self.store.has_reports(date):
-            self.report_listbox.selection_set(0)
-            self.report_listbox.event_generate("<<ListboxSelect>>")
-
-    def save_report(self):
-        date = self.cal.get_date()
-        content = self.text.get("1.0", tk.END).strip()
-        category = self.cat_entry.get().strip()
-        location = self.loc_entry.get().strip()
-        attendees = self.att_entry.get().strip()
-
-        report = {
-            "content": content,
-            "category": category,
-            "location": location,
-            "attendees": attendees,
-        }
-
-        if self.current_index is None:
-            # create new report for this date
-            self.current_index = self.store.add_report(date, report)
-        else:
-            # update existing
-            self.store.update_report(date, self.current_index, report)
-
-        # refresh list and keep selection
-        self.refresh_report_list(date)
-        self.report_listbox.selection_clear(0, tk.END)
-        self.report_listbox.selection_set(self.current_index)
-        self.report_listbox.see(self.current_index)
-
-        # refresh combobox values
-        self.cat_entry['values'] = self.store.list_categories()
-        self.cal.calevent_create(date, "memo", "memo")
-        self.cal.tag_config("memo", background="#FFD966")
+        # update report tab with selected date
+        self.report_tab_obj.set_date(date)
 
     def run(self):
         self.root.mainloop()
 
-    # helper methods for list management
+    # Deprecated methods kept for backward compatibility if needed
+    def save_report(self):
+        pass
+
     def refresh_report_list(self, date):
-        self.report_listbox.delete(0, tk.END)
-        reports = self.store.list_reports(date)
-        for i, r in enumerate(reports):
-            preview = r.get("content", "").splitlines()[0][:40]
-            label = f"{i+1}. [{r.get('category','')}] {preview}"
-            self.report_listbox.insert(tk.END, label)
+        pass
 
     def on_report_select(self, event):
-        sel = self.report_listbox.curselection()
-        if not sel:
-            return
-        index = sel[0]
-        self.current_index = index
-        date = self.cal.get_date()
-        try:
-            r = self.store.get_report(date, index)
-        except Exception:
-            return
-        # populate inputs
-        self.cat_entry['values'] = self.store.list_categories()
-        self.cat_entry.set(r.get("category", ""))
-        self.loc_entry.delete(0, tk.END)
-        self.loc_entry.insert(0, r.get("location", ""))
-        self.att_entry.delete(0, tk.END)
-        self.att_entry.insert(0, r.get("attendees", ""))
-        self.text.delete("1.0", tk.END)
-        self.text.insert(tk.END, r.get("content", ""))
+        pass
 
     def new_report(self):
-        date = self.cal.get_date()
-        self.current_index = self.store.add_report(date, None)
-        self.refresh_report_list(date)
-        self.report_listbox.selection_clear(0, tk.END)
-        self.report_listbox.selection_set(self.current_index)
-        self.report_listbox.event_generate("<<ListboxSelect>>")
+        pass
 
     def delete_report(self):
-        date = self.cal.get_date()
-        sel = self.report_listbox.curselection()
-        if not sel:
-            return
-        idx = sel[0]
-        self.store.delete_report(date, idx)
-        self.refresh_report_list(date)
-        self.current_index = None
-        self.clear_inputs()
+        pass
 
     def clear_inputs(self):
-        self.cat_entry.set("")
-        self.loc_entry.delete(0, tk.END)
-        self.att_entry.delete(0, tk.END)
-        self.text.delete("1.0", tk.END)
+        pass

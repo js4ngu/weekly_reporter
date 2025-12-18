@@ -20,6 +20,15 @@ class ReportStore:
         self._reports.setdefault(date, [])
         self._reports[date][index] = report
 
+    def move_report(self, old_date, new_date, index, report):
+        """보고서를 다른 날짜로 이동"""
+        # 기존 날짜에서 삭제
+        if old_date in self._reports and 0 <= index < len(self._reports[old_date]):
+            del self._reports[old_date][index]
+        # 새 날짜에 추가
+        self._reports.setdefault(new_date, []).append(report)
+        return len(self._reports[new_date]) - 1
+
     def delete_report(self, date, index):
         if date in self._reports and 0 <= index < len(self._reports[date]):
             del self._reports[date][index]
