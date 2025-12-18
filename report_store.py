@@ -1,8 +1,24 @@
+import json
+import os
+from pathlib import Path
+
+
 class ReportStore:
-    def __init__(self):
+    def __init__(self, json_file=None):
         # store reports per date as a list of report dicts
         # { date_str: [ {content, category, location, attendees}, ... ] }
         self._reports = {}
+        
+        # JSON 파일 경로 설정
+        if json_file is None:
+            script_dir = Path(__file__).parent
+            json_file = script_dir / "output" / "personal_report.json"
+        
+        self.json_file = Path(json_file)
+        self.json_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 기존 JSON 파일이 있으면 로드
+        self.load_from_json()
 
     def list_reports(self, date):
         return list(self._reports.get(date, []))
@@ -43,3 +59,23 @@ class ReportStore:
                 if r.get("category"):
                     cats.add(r["category"])
         return sorted(cats)
+
+    def save_to_json(self):
+        """모든 보고서를 JSON 파일로 저장"""
+        try:
+            with open(self.json_file, 'w', encoding='utf-8') as f:
+                json.dump(self._reports, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"JSON 저장 실패: {e}")
+
+    def load_from_json(self):
+        """JSON 파일에서 보고서 로드"""
+        if not self.json_file.exists():
+            return
+        
+        try:
+            with open(self.json_file, 'r', encoding='utf-8') as f:
+                self._reports = json.load(f)
+        except Exception as e:
+            print(f"JSON 로드 실패: {e}")
+            self._reports = {}

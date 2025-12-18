@@ -93,6 +93,8 @@ class ReportApp:
 
     def run(self):
         self.root.mainloop()
+        # 프로그램 종료 시 JSON 저장
+        self.store.save_to_json()
 
     # Deprecated methods kept for backward compatibility if needed
     def save_report(self):
