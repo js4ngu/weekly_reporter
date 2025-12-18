@@ -4,7 +4,7 @@ from tkcalendar import Calendar
 import datetime
 
 import report_store
-from tabs import ReportTab, SearchTab, StatisticsTab, SettingsTab
+from tabs import PersonalTab, SharedTab, WeeklyTab, SpareTab
 
 
 class ReportApp:
@@ -92,17 +92,17 @@ class ReportApp:
         self.notebook = ttk.Notebook(self.root)
         self.notebook.pack(side="right", fill="both", expand=True)
 
-        # Initialize tab instances
-        self.report_tab_obj = ReportTab(self.notebook, self.store)
-        self.search_tab_obj = SearchTab(self.notebook, self.store)
-        self.statistics_tab_obj = StatisticsTab(self.notebook, self.store)
-        self.settings_tab_obj = SettingsTab(self.notebook, self.store)
+        # Initialize tab instances (named to match tab labels)
+        self.personal_tab = PersonalTab(self.notebook, self.store)
+        self.shared_tab = SharedTab(self.notebook, self.store)
+        self.weekly_tab = WeeklyTab(self.notebook, self.store)
+        self.spare_tab = SpareTab(self.notebook, self.store)
 
-        # Add tabs to notebook
-        self.notebook.add(self.report_tab_obj.get_frame(), text="개인보고서")
-        self.notebook.add(self.search_tab_obj.get_frame(), text="검색")
-        self.notebook.add(self.statistics_tab_obj.get_frame(), text="통계")
-        self.notebook.add(self.settings_tab_obj.get_frame(), text="설정")
+        # Add tabs to notebook (labels kept in Korean)
+        self.notebook.add(self.personal_tab.get_frame(), text="개인업무")
+        self.notebook.add(self.shared_tab.get_frame(), text="공통업무")
+        self.notebook.add(self.weekly_tab.get_frame(), text="개인주간업무보고")
+        self.notebook.add(self.spare_tab.get_frame(), text="예비")
 
         # keyboard shortcuts: 't' and Ctrl+T
         try:
@@ -114,7 +114,7 @@ class ReportApp:
     def on_date_select(self, event):
         date = self.cal.get_date()
         # update report tab with selected date
-        self.report_tab_obj.set_date(date)
+        self.personal_tab.set_date(date)
 
     def go_to_today(self):
         today = datetime.date.today()
@@ -128,7 +128,7 @@ class ReportApp:
                 pass
         # trigger tab update
         try:
-            self.report_tab_obj.set_date(today.strftime("%Y-%m-%d"))
+            self.personal_tab.set_date(today.strftime("%Y-%m-%d"))
         except Exception:
             pass
 

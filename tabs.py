@@ -4,16 +4,17 @@ from tkcalendar import Calendar
 import datetime
 
 
-class ReportTab:
-    """보고서 입력/관리 탭"""
-    def __init__(self, parent, store):
+class PersonalTab:
+    """개인업무 입력/관리 탭 (이전 ReportTab)"""
+    def __init__(self, parent, store, owner="personal"):
         self.store = store
         self.parent = parent
         self.frame = tk.Frame(parent)
+        self.owner = owner
         self.current_index = None
         self.current_orig_date = None
         self.current_date = None
-        self._visible_reports = []  # list of (orig_date, idx)
+        self._visible_reports = []  # list of (owner, orig_date, idx)
         self._build_ui()
 
     def _build_ui(self):
@@ -21,7 +22,16 @@ class ReportTab:
         self.list_frame = tk.Frame(self.frame)
         self.list_frame.pack(side="top", fill="x", expand=False)
 
-        self.list_label = tk.Label(self.list_frame, text="보고서 목록")
+        # label text depends on owner (personal/shared)
+        label_text = "보고서 목록"
+        try:
+            if getattr(self, 'owner', None) == 'shared':
+                label_text = "공통업무 목록"
+            elif getattr(self, 'owner', None) == 'personal':
+                label_text = "개인업무 목록"
+        except Exception:
+            label_text = "보고서 목록"
+        self.list_label = tk.Label(self.list_frame, text=label_text)
         self.list_label.pack(anchor="nw", padx=6, pady=(6, 0))
 
         self.report_listbox = tk.Listbox(self.list_frame, height=3)
@@ -33,11 +43,11 @@ class ReportTab:
 
         btns_frame = tk.Frame(self.list_frame)
         btns_frame.pack(side="left", padx=6)
-        self.new_btn = tk.Button(btns_frame, text="새보고서 작성", command=self.create_new_report)
+        self.new_btn = tk.Button(btns_frame, text="새업무", command=self.create_new_report)
         self.new_btn.pack(fill="x")
-        self.save_btn = tk.Button(btns_frame, text="보고서 저장", command=self.save_report)
+        self.save_btn = tk.Button(btns_frame, text="업무저장", command=self.save_report)
         self.save_btn.pack(fill="x", pady=(6,0))
-        self.del_btn = tk.Button(btns_frame, text="보고서 삭제", command=self.delete_report, state='disabled')
+        self.del_btn = tk.Button(btns_frame, text="업무삭제", command=self.delete_report, state='disabled')
         self.del_btn.pack(fill="x", pady=(6,0))
 
         # Bottom: input area (category/location/attendees/text/save)
@@ -100,7 +110,7 @@ class ReportTab:
         self.clear_inputs()
         self.report_listbox.selection_clear(0, tk.END)
         self.del_btn.config(state='disabled')
-        if self.store.has_reports(date):
+        if self.store.has_reports(date, owner=self.owner):
             self.report_listbox.selection_set(0)
             self.report_listbox.event_generate("<<ListboxSelect>>")
 
@@ -148,24 +158,24 @@ class ReportTab:
 
         if self.current_index is None:
             # 새 보고서 추가 (저장 키는 시작일)
-            self.current_index = self.store.add_report(key_date, report)
+            self.current_index = self.store.add_report(key_date, report, owner=self.owner)
             self.current_orig_date = key_date
         else:
             # 보고서 수정 - 실제로 저장된 원래 키(orig_date)를 사용
             old_date = self.current_orig_date or selected_date
             if old_date != key_date:
                 # 날짜 변경: 기존 날짜에서 삭제, 새 날짜에 추가
-                self.current_index = self.store.move_report(old_date, key_date, self.current_index, report)
+                self.current_index = self.store.move_report(old_date, key_date, self.current_index, report, owner=self.owner)
                 self.current_orig_date = key_date
             else:
                 # 같은 원래 키: 업데이트
-                self.store.update_report(key_date, self.current_index, report)
+                self.store.update_report(key_date, self.current_index, report, owner=self.owner)
 
         # 새로고침 후, visible list에서 방금 저장된 항목의 인덱스를 찾아 선택
         self.refresh_report_list(selected_date)
         self.report_listbox.selection_clear(0, tk.END)
         sel_idx = None
-        for i, (orig, idx) in enumerate(self._visible_reports):
+        for i, (ow, orig, idx) in enumerate(self._visible_reports):
             if orig == (self.current_orig_date or key_date) and idx == self.current_index:
                 sel_idx = i
                 break
@@ -180,9 +190,9 @@ class ReportTab:
 
     def refresh_report_list(self, date):
         self.report_listbox.delete(0, tk.END)
-        found = self.store.find_reports_for_date(date)
+        found = self.store.find_reports_for_date(date, owner=self.owner)
         self._visible_reports = []
-        for i, (orig_date, idx, r) in enumerate(found):
+        for i, (ow, orig_date, idx, r) in enumerate(found):
             preview = r.get("content", "").splitlines()[0][:40]
             start = r.get("start_date", orig_date)
             end = r.get("end_date", start)
@@ -192,7 +202,7 @@ class ReportTab:
                 time_str = f"[{start}~{end}] "
             label = f"{i+1}. {time_str}[{r.get('category','')}] {preview}"
             self.report_listbox.insert(tk.END, label)
-            self._visible_reports.append((orig_date, idx))
+            self._visible_reports.append((ow, orig_date, idx))
 
     def on_report_select(self, event):
         sel = self.report_listbox.curselection()
@@ -200,9 +210,9 @@ class ReportTab:
             self.del_btn.config(state='disabled')
             return
         index = sel[0]
-        # map visible index -> (orig_date, idx)
+        # map visible index -> (owner, orig_date, idx)
         try:
-            orig_date, orig_idx = self._visible_reports[index]
+            ow, orig_date, orig_idx = self._visible_reports[index]
         except Exception:
             self.del_btn.config(state='disabled')
             return
@@ -211,7 +221,7 @@ class ReportTab:
         self.current_index = orig_idx
 
         try:
-            r = self.store.get_report(orig_date, orig_idx)
+            r = self.store.get_report(orig_date, orig_idx, owner=ow)
         except Exception:
             return
 
@@ -253,12 +263,12 @@ class ReportTab:
             return
 
         # add empty report under the selected date
-        self.current_index = self.store.add_report(date, {"content":"", "category":"", "location":"", "attendees":"", "start_date":date, "end_date":""})
+        self.current_index = self.store.add_report(date, {"content":"", "category":"", "location":"", "attendees":"", "start_date":date, "end_date":""}, owner=self.owner)
         self.current_orig_date = date
         self.refresh_report_list(date)
         self.report_listbox.selection_clear(0, tk.END)
         # select the last visible item if matches
-        for i, (orig, idx) in enumerate(self._visible_reports):
+        for i, (ow, orig, idx) in enumerate(self._visible_reports):
             if orig == self.current_orig_date and idx == self.current_index:
                 self.report_listbox.selection_set(i)
                 self.report_listbox.event_generate("<<ListboxSelect>>")
@@ -288,10 +298,10 @@ class ReportTab:
             return
         idx = sel[0]
         try:
-            orig_date, orig_idx = self._visible_reports[idx]
+            ow, orig_date, orig_idx = self._visible_reports[idx]
         except Exception:
             return
-        self.store.delete_report(orig_date, orig_idx)
+        self.store.delete_report(orig_date, orig_idx, owner=ow)
         self.refresh_report_list(self.start_entry.get().strip())
         self.current_index = None
         self.clear_inputs()
@@ -319,8 +329,18 @@ class ReportTab:
         self.end_var.set(False)
 
 
-class SearchTab:
-    """검색 탭"""
+class SharedTab(PersonalTab):
+    """공통업무(Shared) 탭 — PersonalTab UI/동작을 공유합니다."""
+    def __init__(self, parent, store):
+        super().__init__(parent, store, owner="shared")
+
+
+# 호환을 위해 CommonTab 별칭 유지
+CommonTab = SharedTab
+
+
+class WeeklyTab:
+    """개인주간업무보고 탭 (이전 StatisticsTab)"""
     def __init__(self, parent, store):
         self.store = store
         self.parent = parent
@@ -328,31 +348,15 @@ class SearchTab:
         self._build_ui()
 
     def _build_ui(self):
-        label = tk.Label(self.frame, text="검색 기능 (준비 중)", font=("Arial", 14))
+        label = tk.Label(self.frame, text="(준비 중)", font=("Arial", 14))
         label.pack(expand=True)
 
     def get_frame(self):
         return self.frame
 
 
-class StatisticsTab:
-    """통계 탭"""
-    def __init__(self, parent, store):
-        self.store = store
-        self.parent = parent
-        self.frame = tk.Frame(parent)
-        self._build_ui()
-
-    def _build_ui(self):
-        label = tk.Label(self.frame, text="통계 분석 (준비 중)", font=("Arial", 14))
-        label.pack(expand=True)
-
-    def get_frame(self):
-        return self.frame
-
-
-class SettingsTab:
-    """설정 탭"""
+class SpareTab:
+    """예비 탭 (이전 SettingsTab)"""
     def __init__(self, parent, store):
         self.store = store
         self.parent = parent
