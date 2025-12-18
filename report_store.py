@@ -29,6 +29,29 @@ class ReportStore:
                         cfg = _json.load(_f)
                         if isinstance(cfg, dict) and cfg.get("data_dir"):
                             output_dir = cfg.get("data_dir")
+                else:
+                    # neither config exists -> create default root config.json
+                    default_cfg = {
+                        "name": "작성자",
+                        "data_dir": "data",
+                        "weekly_report_dir": {
+                            "json_dir": "./data/weekly_report_json",
+                            "xlsx_dir": "./data/weekly_report_xlsx"
+                        },
+                        "calendar": {
+                            "thisweek": {"background": "#FFFFFF", "foreground": "#FFFFFF"},
+                            "nextweek": {"background": "#167FFF", "foreground": "#167FFF"},
+                            "nextnextweek": {"background": "#167FFF", "foreground": "#167FFF"},
+                            "today": {"foreground": "#FFAA00"},
+                            "selectforeground": "#FF0000"
+                        },
+                        "xlsx_template": {}
+                    }
+                    try:
+                        with open(cfg_root, 'w', encoding='utf-8') as _f:
+                            _json.dump(default_cfg, _f, ensure_ascii=False, indent=2)
+                    except Exception:
+                        pass
             except Exception:
                 pass
             json_file = script_dir / output_dir / "data.json"
