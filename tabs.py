@@ -348,7 +348,7 @@ class WeeklyTab:
         self._build_ui()
 
     def _build_ui(self):
-        label = tk.Label(self.frame, text="(준비 중)", font=("Arial", 14))
+        label = tk.Label(self.frame, text="준비 중", font=("Arial", 14))
         label.pack(expand=True)
 
     def get_frame(self):
@@ -364,7 +364,7 @@ class SpareTab:
         self._build_ui()
 
     def _build_ui(self):
-        label = tk.Label(self.frame, text="설정 (준비 중)", font=("Arial", 14))
+        label = tk.Label(self.frame, text="준비 중", font=("Arial", 14))
         label.pack(expand=True)
 
     def get_frame(self):
