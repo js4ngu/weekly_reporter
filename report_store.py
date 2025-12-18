@@ -11,7 +11,27 @@ class ReportStore:
         # JSON 파일 경로 설정
         if json_file is None:
             script_dir = Path(__file__).parent
-            json_file = script_dir / "output" / "data.json"
+            # prefer config.json inside the data folder if present (user requested)
+            default_dir = "data"
+            cfg_in_data = script_dir / default_dir / "config.json"
+            cfg_root = script_dir / "config.json"
+            output_dir = default_dir
+            try:
+                import json as _json
+                # prefer config inside data folder
+                if cfg_in_data.exists():
+                    with open(cfg_in_data, 'r', encoding='utf-8') as _f:
+                        cfg = _json.load(_f)
+                        if isinstance(cfg, dict) and cfg.get("data_dir"):
+                            output_dir = cfg.get("data_dir")
+                elif cfg_root.exists():
+                    with open(cfg_root, 'r', encoding='utf-8') as _f:
+                        cfg = _json.load(_f)
+                        if isinstance(cfg, dict) and cfg.get("data_dir"):
+                            output_dir = cfg.get("data_dir")
+            except Exception:
+                pass
+            json_file = script_dir / output_dir / "data.json"
 
         self.json_file = Path(json_file)
         self.json_file.parent.mkdir(parents=True, exist_ok=True)

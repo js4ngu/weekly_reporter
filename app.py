@@ -111,10 +111,25 @@ class ReportApp:
         except Exception:
             pass
 
+        # initialize tabs with today's date so shared/personal both have data loaded
+        try:
+            today = datetime.date.today().strftime("%Y-%m-%d")
+            self.personal_tab.set_date(today)
+            self.shared_tab.set_date(today)
+        except Exception:
+            pass
+
     def on_date_select(self, event):
         date = self.cal.get_date()
-        # update report tab with selected date
-        self.personal_tab.set_date(date)
+        # update both personal and shared tabs with selected date
+        try:
+            self.personal_tab.set_date(date)
+        except Exception:
+            pass
+        try:
+            self.shared_tab.set_date(date)
+        except Exception:
+            pass
 
     def go_to_today(self):
         today = datetime.date.today()
@@ -129,6 +144,7 @@ class ReportApp:
         # trigger tab update
         try:
             self.personal_tab.set_date(today.strftime("%Y-%m-%d"))
+            self.shared_tab.set_date(today.strftime("%Y-%m-%d"))
         except Exception:
             pass
 
